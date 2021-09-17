@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/exec"
 
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/zmb3/spotify/v2"
@@ -33,19 +35,27 @@ func main() {
 	}()
 
 	url := auth.AuthURL(state)
-	fmt.Println("Follow auth url to generate token:", url)
-
-	tok := <-ch
-	fmt.Printf("Token: %#v\n", tok)
-
-	ctx := context.Background()
-	client := spotify.New(auth.Client(ctx, tok))
-	user, err := client.CurrentUser(ctx)
+	err := exec.Command("open", url).Start()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("User ID:", user.ID)
+	tok := <-ch
+	fmt.Printf("SPOTIFY_ACCESS_TOKEN=%s\n", tok.AccessToken)
+	fmt.Printf("SPOTIFY_REFRESH_TOKEN=%s\n", tok.RefreshToken)
+
+	assertUserID := os.Getenv("ASSERT_USER_ID")
+	if assertUserID != "" {
+		ctx := context.Background()
+		client := spotify.New(auth.Client(ctx, tok))
+		user, err := client.CurrentUser(ctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if assertUserID != user.ID {
+			log.Fatalf("Unexpected user ID: %s", user.ID)
+		}
+	}
 }
 
 func completeAuth(auth *spotifyauth.Authenticator, state string, ch chan<- *oauth2.Token) http.Handler {
